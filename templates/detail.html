@@ -1,0 +1,180 @@
+{% extends "base_detail_list.html" %}
+{% load static %}
+{% block title %}天天生鲜-商品详情{% endblock title %}
+
+{% block main_content %}
+    <div class="breadcrumb">
+        <a href="#">全部分类</a>
+        <span>></span>
+        <a href="#">{{ sku.type.name }}</a>
+        <span>></span>
+        <a href="#">商品详情</a>
+    </div>
+
+    <div class="goods_detail_con clearfix">
+        <div class="goods_detail_pic fl"><img src="{{ sku.image.url }}" width="360px" height="280px"></div>
+
+        <div class="goods_detail_list fr">
+            <h3>{{ sku.name }}</h3>
+            <p>{{ sku.desc }}</p>
+            <div class="prize_bar">
+                <span class="show_pirze">¥<em>{{ sku.price }}</em></span>
+                <span class="show_unit">单  位：{{ sku.unite }}</span>
+            </div>
+            <div class="goods_num clearfix">
+                <div class="num_name fl">数 量：</div>
+                <div class="num_add fl">
+                    <input type="text" class="num_show fl" value="1">
+                    <a href="javascript:void(0);" class="add fr">+</a>
+                    <a href="javascript:void(0);" class="minus fr">-</a>
+                </div>
+            </div>
+            <div>
+                <p>其他规格：</p>
+                <ul>
+                    {% for sku in same_spu_skus %}
+                        <li><a href="{% url 'goods:detail' sku.id %}">{{ sku.name }}</a></li>
+                    {% endfor %}
+                </ul>
+
+            </div>
+            <div class="total">总价：<em>16.80元</em></div>
+            <div class="operate_btn">
+                {% csrf_token %}
+                <a href="javascript:void(0);" class="buy_btn">立即购买</a>
+                <a href="javascript:void(0);" class="add_cart" sku_id="{{ sku.id }}" id="add_cart">加入购物车</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="main_wrap clearfix">
+        <div class="l_wrap fl clearfix">
+            <div class="new_goods">
+                <h3>新品推荐</h3>
+                <ul>
+                    {% for sku in new_skus %}
+                        <li>
+                            <a href="{% url 'goods:detail' sku.id %}"><img src="{{ sku.image.url }}"></a>
+                            <h4><a href="{% url 'goods:detail' sku.id %}">{{ sku.name }}</a></h4>
+                            <div class="prize">￥{{ sku.price }}</div>
+                        </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="r_wrap fr clearfix">
+            <ul class="detail_tab clearfix">
+                <li id="tag_detail" class="active">商品介绍</li>
+                <li id="tag_comment">评论</li>
+            </ul>
+
+            <div class="tab_content" id="tab_detail">
+                <dl>
+                    <dt>商品详情：</dt>
+{#                    {% autoescape on %}#}
+{#                    {% endautoescape %}#}
+                    <dd>{{ sku.goods.detail|safe }}</dd>
+                </dl>
+            </div>
+
+            <div class="tab_content" id="tab_comment" style="display: none">
+                <dl>
+                    {% for order in sku_orders %}
+                        <dt style="display: flex; justify-content: space-between">
+                            <span>用户名：{{ order.order.user.username }}</span>
+                            <span>评论时间：{{ order.update_time }}</span>
+                        </dt>
+                        <dt>{{ order.comment }}</dt>
+                        {% if not forloop.last %}
+                            <hr/>
+                        {% endif %}
+                    {% endfor %}
+                </dl>
+            </div>
+        </div>
+    </div>
+{% endblock main_content %}
+{% block bottom %}<div class="add_jump"></div>{% endblock bottom %}
+{% block bottomfiles %}
+    <script type="text/javascript" src="{% static 'js/jquery-1.12.4.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'js/addCartAnimate.js' %}"></script>
+    <script type="text/javascript">
+
+        function update_goods_amount() {
+            // 获取商品价格，数目
+            let price = $('.show_pirze').children('em').text();
+            let amount = $('.num_show').val();
+            price = parseFloat(price);
+            amount = parseInt(amount);
+            let total_price = price * amount;
+            $('.total').children('em').text(total_price.toFixed(2) + "元");
+        }
+
+        $('.add').click(function () {
+            let amountBox = $('.num_show');
+            let amount = parseInt(amountBox.val());
+            amount++;
+            amountBox.val(amount);
+            update_goods_amount();
+        })
+        $('.minus').click(function () {
+            let amountBox = $('.num_show');
+            let amount = parseInt(amountBox.val());
+            amount--;
+            if (amount <= 1) {
+                amount = 1
+            }
+            amountBox.val(amount);
+            update_goods_amount();
+        })
+        // 手动输入商品的数量
+        $('.num_show').blur(function () {
+            let amount = $(this).val();
+            if (isNaN(amount) || amount.trim().length == 0 || parseInt(amount) <= 1) {
+                amount = 1;
+            }
+            $(this).val(parseInt(amount));
+            update_goods_amount();
+        })
+        update_goods_amount();
+
+        $('#add_cart').click(function () {
+            // 获取商品id和商品数量
+            let sku_id = $(this).attr('sku_id')
+            let count = parseInt($('.num_show').val())
+            let csrf = $('input[name="csrfmiddlewaretoken"]').val()
+            let params = {
+                "sku_id": sku_id,
+                "count": count,
+                "csrfmiddlewaretoken": csrf,
+            }
+            let $this = $(this);
+            // 发起ajax post请求
+            $.post('/cart/add', params, function (data) {
+                if (data.res == 5) {
+                    addCartAnimate($this, data.cart_count);
+                } else {
+                    if (data.res == 0) {
+                        window.location.href = "{% url 'user:login' %}"
+                    } else {
+                        alert(data.errmsg);
+                    }
+                }
+            })
+        })
+
+        $("#tag_detail").click(function () {
+            $("#tag_comment").removeClass("active");
+            $(this).addClass("active");
+            $("#tab_detail").show();
+            $("#tab_comment").hide();
+        });
+        $("#tag_comment").click(function () {
+            $("#tag_detail").removeClass("active");
+            $(this).addClass("active");
+            $("#tab_comment").show();
+            $("#tab_detail").hide();
+        })
+    </script>
+{% endblock bottomfiles %}

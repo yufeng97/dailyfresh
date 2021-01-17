@@ -1,0 +1,194 @@
+{% extends "base_user_center.html" %}
+{% load static %}
+{% block topfiles %}
+    <link rel="stylesheet" type="text/css" href="{% static 'css/test.css' %}">
+{% endblock topfiles %}
+{% block right_con %}
+    <div class="right_content clearfix">
+        <h3 class="common_title2">收货地址</h3>
+
+        <div class="site_con">
+            <table class="address_list_table w980">
+                <thead>
+                <tr>
+                    <th width="10%"><span>收件人</span></th>
+                    <th width="40%"><span>详细地址</span></th>
+                    <th width="7%"><span>邮编</span></th>
+                    <th width="13%"><span>手机</span></th>
+                    <th width="10%"><span>操作</span></th>
+                    <th width="10%"><span>设置</span></th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for addr in all_address %}
+                    <tr>
+                        <input type="hidden" name="addr_id" value="{{ addr.id }}">
+                        <td width="10%">{{ addr.receiver }}</td>
+                        <td width="50%">{{ addr.addr }}</td>
+                        <td width="10%">{{ addr.zip_code }}</td>
+                        <td width="10%">{{ addr.phone }}</td>
+                        <td width="10%">
+                            <a href="javascript:;" class="modify">修改</a>
+                            <span>&nbsp;|&nbsp;</span>
+                            <a href="javascript:;">删除</a></td>
+                        {% if addr.is_default %}
+                            <td width="10%">默认地址</td>
+                        {% else %}
+                            <td width="10%"><a href="javascript:;" class="set_default_addr">设为默认</a></td>
+                        {% endif %}
+                    </tr>
+                {% endfor %}
+
+                </tbody>
+            </table>
+
+            <dl>
+                <dt>当前地址：</dt>
+                {% if address %}
+                    <dd class="default_address">{{ address.addr }} （{{ address.receiver }} 收） {{ address.phone }}</dd>
+                {% else %}
+                    <dd class="default_address">无默认地址</dd>
+                {% endif %}
+            </dl>
+        </div>
+
+        <button id="rollback">新增收货地址</button>
+
+        <h3 class="common_title2">新增地址</h3>
+        <div class="site_con">
+            <form method="post">
+                {% csrf_token %}
+                <div class="form_group">
+                    <label>收件人：</label>
+                    <input type="text" name="receiver">
+                </div>
+                <div class="form_group form_group2">
+                    <label>详细地址：</label>
+                    <textarea class="site_area" name="addr"></textarea>
+                </div>
+                <div class="form_group">
+                    <label>邮编：</label>
+                    <input type="text" name="zip_code">
+                </div>
+                <div class="form_group">
+                    <label>手机：</label>
+                    <input type="text" name="phone">
+                </div>
+
+                <input type="submit" name="" value="提交" class="info_submit">
+            </form>
+        </div>
+    </div>
+{% endblock right_con %}
+{% block bottom %}
+    <!--自定义弹窗-->
+    <div class="widget widget1" id="window" hidden="hidden">
+        <div class="body">
+
+            <div class="btns">
+                <a href="javascript:void(0);" class="btn-cancel" id="btn_cancel">取 消</a>
+                <a href="javascript:void(0);" class="btn-confirm" id="btn_ok">确 定</a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
+{% block bottomfiles %}
+    <script src="{% static 'js/jquery-1.12.4.min.js/' %}"></script>
+    <script>
+        var names = ["receiver", "addr", "zip_code", "phone"]
+        $(".modify").each(function () {
+            $(this).click(function () {
+                if ($(this).text() === "修改") {
+                    $(this).text("保存");
+                    let children = $(this).parents("tr").children("td");
+                    for (let i = 0; i < 4; i++) {
+                        let child = children[i]
+                        let input = $("<input>");
+                        input.attr("type", "text").attr("value", child.textContent);
+                        child.innerHTML = ""
+                        child.append(input.get(0))
+                    }
+                } else if ($(this).text() === "保存") {
+                    let parent = $(this).parents("tr")
+                    let addr_id = parent.find(":hidden").val();
+                    let csrf = $('input[name="csrfmiddlewaretoken"]').val();
+                    let params = {"addr_id": addr_id, "csrfmiddlewaretoken": csrf};
+                    let children = parent.children("td");
+                    let updatedValues = [];
+                    for (let i = 0; i < 4; i++) {
+                        let child = $(children[i]);
+                        let text = child.find("input").val();
+                        params[names[i]] = text;
+                        updatedValues.push(text);
+                    }
+                    let $this = $(this);
+                    // update
+                    $.post("/user/address/update", params, function (data) {
+                        if (data.res == 4) {
+                            for (let i = 0; i < 4; i++) {
+                                let child = $(children[i]);
+                                child.html(updatedValues[i]);
+                            }
+                            if (children.last().text() === "默认地址") {
+                                update_current_address(updatedValues[1], updatedValues[0], updatedValues[3]);
+                            }
+                            $this.text("修改")
+                        } else {
+                            alert(data.errmsg);
+                        }
+                    });
+                }
+            })
+        })
+
+        $(".set_default_addr").each(function () {
+            $(this).click(set_default);
+        })
+
+        function set_default() {
+            let addr_id = $(this).parents("tr").find(":hidden").val();
+            let csrf = $('input[name="csrfmiddlewaretoken"]').val();
+            let params = {"addr_id": addr_id, "csrfmiddlewaretoken": csrf};
+            let $this = $(this);
+
+            $.post("/user/address/set_default", params, function (data) {
+                if (data.res == 3) {
+                    let old_id = data.old_id;
+                    let td = $(`input:hidden[name="addr_id"][value="${old_id}"]`).parent().children("td").last();
+                    let a_tag = $("<a>");
+                    a_tag.attr("href", "javascript:;").addClass("set_default_addr").text("设为默认").click(set_default);
+                    td.html("").append(a_tag);
+
+                    let children = $this.parents("tr").children("td");
+                    let receiver = $(children[0]).text();
+                    let address = $(children[1]).text();
+                    let phone = $(children[3]).text();
+                    update_current_address(receiver, address, phone);
+                    $this.parent().html("默认地址");
+                } else {
+                    alert(data.errmsg);
+                }
+            });
+        }
+
+        function update_current_address(address, receiver, phone) {
+            $(".default_address").text(`${address} （${receiver} 收） ${phone}`);
+        }
+
+        $(function () {
+            $('#rollback').click(function () {
+                $('#window').removeAttr('hidden');
+            })
+            //确认
+            $('#btn_ok').click(function () {
+                $('#window').attr('hidden', 'hidden');
+                //一些操作
+            })
+            //取消
+            $('#btn_cancel').click(function () {
+                $('#window').attr('hidden', 'hidden');
+            })
+
+        })
+    </script>
+{% endblock bottomfiles %}
